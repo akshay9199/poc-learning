@@ -1,1 +1,74 @@
+WITH Dependency_Tree (NAME, TYPE, REFERENCED_NAME, REFERENCED_TYPE, LEVEL)
+AS
+(
+    SELECT 
+        NAME, 
+        TYPE, 
+        REFERENCED_NAME, 
+        REFERENCED_TYPE, 
+        1 AS LEVEL
+    FROM 
+        ALL_DEPENDENCIES
+    WHERE 
+        NAME = 'ROOT_PROC'
+        AND OWNER = 'MY_SCHEMA'
+        AND TYPE IN ('PROCEDURE', 'FUNCTION', 'PACKAGE')
+    
+    UNION ALL
+    
+    SELECT 
+        d.NAME, 
+        d.TYPE, 
+        d.REFERENCED_NAME, 
+        d.REFERENCED_TYPE, 
+        dt.LEVEL + 1
+    FROM 
+        ALL_DEPENDENCIES d
+        JOIN Dependency_Tree dt ON d.NAME = dt.REFERENCED_NAME AND d.OWNER = 'MY_SCHEMA'
+)
+-- Select from the dependency tree
+SELECT 
+    dt.NAME AS OBJECT_NAME,
+    dt.TYPE AS OBJECT_TYPE,
+    dt.REFERENCED_NAME,
+    dt.REFERENCED_TYPE,
+    dt.LEVEL
+FROM 
+    Dependency_Tree dt
+
+UNION ALL
+
+-- Include procedures within the referenced packages
+SELECT 
+    dt.NAME AS OBJECT_NAME,
+    'PROCEDURE' AS OBJECT_TYPE,
+    ap.PROCEDURE_NAME AS REFERENCED_NAME,
+    'PROCEDURE' AS REFERENCED_TYPE,
+    dt.LEVEL + 1 AS LEVEL
+FROM 
+    Dependency_Tree dt
+    JOIN ALL_PROCEDURES ap ON dt.REFERENCED_NAME = ap.OBJECT_NAME
+WHERE 
+    dt.REFERENCED_TYPE = 'PACKAGE'
+    AND ap.OBJECT_TYPE = 'PROCEDURE'
+    AND ap.OWNER = 'MY_SCHEMA'
+
+UNION ALL
+
+-- Include functions within the referenced packages
+SELECT 
+    dt.NAME AS OBJECT_NAME,
+    'FUNCTION' AS OBJECT_TYPE,
+    ap.PROCEDURE_NAME AS REFERENCED_NAME,
+    'FUNCTION' AS REFERENCED_TYPE,
+    dt.LEVEL + 1 AS LEVEL
+FROM 
+    Dependency_Tree dt
+    JOIN ALL_PROCEDURES ap ON dt.REFERENCED_NAME = ap.OBJECT_NAME
+WHERE 
+    dt.REFERENCED_TYPE = 'PACKAGE'
+    AND ap.OBJECT_TYPE = 'FUNCTION'
+    AND ap.OWNER = 'MY_SCHEMA'
+ORDER BY 
+    LEVEL;
 
